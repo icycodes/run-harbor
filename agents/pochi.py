@@ -46,13 +46,7 @@ class Pochi(BaseInstalledAgent):
         return stdout.strip()
 
     async def install(self, environment: BaseEnvironment) -> None:
-        # Install system packages (root)
-        await self.exec_as_root(
-            environment,
-            command="apt-get update && apt-get install -y curl ripgrep",
-            env={"DEBIAN_FRONTEND": "noninteractive"},
-        )
-        # Install pochi (as default user)
+        # Check if pochi is installed
         version_spec = f"pochi-{self._version}" if self._version else ""
 
         check_result = await self.exec_as_agent(
@@ -84,6 +78,15 @@ class Pochi(BaseInstalledAgent):
 
         if install_required:
             print("Installing pochi")
+
+            # Install system packages (root)
+            await self.exec_as_root(
+                environment,
+                command="apt-get update && apt-get install -y curl ripgrep",
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+            )
+
+            # Install pochi (agent)
             await self.exec_as_agent(
                 environment,
                 command=(
