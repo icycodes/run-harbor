@@ -90,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument(
 		"--prefix-fraction",
 		type=float,
-		default=1 / 3,
+		default=1 / 4,
 		help="Minimum fraction of a secret that must appear before it is treated as a leak.",
 	)
 	parser.add_argument(
@@ -98,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
 		type=int,
 		default=8,
 		help="Absolute minimum prefix length required for partial secret matching.",
+	)
+	parser.add_argument(
+		"--max-prefix-length",
+		type=int,
+		default=12,
+		help="Absolute maximum prefix length required for partial secret matching.",
 	)
 	return parser
 
@@ -199,9 +205,16 @@ def find_line_and_column(text: str, offset: int) -> tuple[int, int]:
 	return line, column
 
 
-def get_min_prefix_length(secret: Secret, prefix_fraction: float, min_prefix_length: int) -> int:
+
+def get_prefix_length(
+	secret: Secret,
+	prefix_fraction: float,
+	min_prefix_length: int,
+	max_prefix_length: int,
+) -> int:
 	required = math.ceil(len(secret.value) * prefix_fraction)
-	return min(len(secret.value), max(min_prefix_length, required))
+	bounded = min(max_prefix_length, max(min_prefix_length, required))
+	return min(len(secret.value), bounded)
 
 
 def collect_occurrences(
@@ -209,12 +222,18 @@ def collect_occurrences(
 	secrets: list[Secret],
 	prefix_fraction: float,
 	min_prefix_length: int,
+	max_prefix_length: int,
 ) -> tuple[list[LeakOccurrence], list[tuple[int, int]]]:
 	occurrences: list[LeakOccurrence] = []
 	occupied_ranges: list[tuple[int, int]] = []
 
 	for secret in secrets:
-		prefix_length = get_min_prefix_length(secret, prefix_fraction, min_prefix_length)
+		prefix_length = get_prefix_length(
+			secret,
+			prefix_fraction=prefix_fraction,
+			min_prefix_length=min_prefix_length,
+			max_prefix_length=max_prefix_length,
+		)
 		needle = secret.value[:prefix_length]
 		start = 0
 		while True:
@@ -257,6 +276,7 @@ def mask_file(
 	dry_run: bool,
 	prefix_fraction: float,
 	min_prefix_length: int,
+	max_prefix_length: int,
 ) -> FileResult | None:
 	try:
 		content = path.read_bytes()
@@ -273,6 +293,7 @@ def mask_file(
 		secrets,
 		prefix_fraction=prefix_fraction,
 		min_prefix_length=min_prefix_length,
+		max_prefix_length=max_prefix_length,
 	)
 	replacements = len(ranges)
 
@@ -304,6 +325,7 @@ def scan_jobs(
 	dry_run: bool,
 	prefix_fraction: float,
 	min_prefix_length: int,
+	max_prefix_length: int,
 ) -> list[FileResult]:
 	results: list[FileResult] = []
 	for path in jobs_dir.rglob("*"):
@@ -316,6 +338,7 @@ def scan_jobs(
 			dry_run=dry_run,
 			prefix_fraction=prefix_fraction,
 			min_prefix_length=min_prefix_length,
+			max_prefix_length=max_prefix_length,
 		)
 		if result is not None:
 			results.append(result)
@@ -338,6 +361,9 @@ def main() -> int:
 	if not jobs_dir.exists():
 		parser.error(f"jobs directory does not exist: {jobs_dir}")
 
+	if args.max_prefix_length < args.min_prefix_length:
+		parser.error("--max-prefix-length must be greater than or equal to --min-prefix-length")
+
 	if not secrets:
 		source_hint = str(env_file) if env_file.exists() else f"missing env file: {env_file}"
 		print(f"No secret values found to scan. Source: {source_hint}")
@@ -350,6 +376,7 @@ def main() -> int:
 		dry_run=args.dry_run,
 		prefix_fraction=args.prefix_fraction,
 		min_prefix_length=args.min_prefix_length,
+		max_prefix_length=args.max_prefix_length,
 	)
 
 	action = "would mask" if args.dry_run else "masked"
