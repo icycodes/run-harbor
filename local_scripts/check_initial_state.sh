@@ -79,7 +79,7 @@ PY
             --env-file "$env_file" \
             -w /workspace \
             "$image_name" \
-            pytest bootstrap/test_initial_state.py >/dev/null
+            sh -lc 'mkdir -p /logs && python3 -c "import uuid; print(uuid.uuid4())" > /logs/trial_id && exec pytest bootstrap/test_initial_state.py' >/dev/null
 
         docker cp "$dir/." "$container_name:/workspace"
         docker start -a "$container_name"
