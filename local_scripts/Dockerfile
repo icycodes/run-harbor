@@ -22,7 +22,7 @@ RUN agent-browser install
 RUN curl -sSfL https://astral.sh/uv/0.9.7/install.sh | sh
 
 # Install Pochi CLI
-RUN curl -fsSL https://getpochi.com/install.sh | bash && ln -sf ~/.pochi/bin/pochi /usr/local/bin/pochi
+RUN curl -fsSL https://getpochi.com/install.sh | bash -s "pochi-v0.6.8" && ln -sf ~/.pochi/bin/pochi /usr/local/bin/pochi
 
 # Proxy ENVs
 ENV http_proxy="http://172.17.0.1:1087"
