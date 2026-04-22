@@ -24,5 +24,6 @@
 #     --n-attempts 1 \
 #     --max-retries 0 \
 #     --n-concurrent 5 \
+#     --artifact /home/user \
 #     --yes
 
