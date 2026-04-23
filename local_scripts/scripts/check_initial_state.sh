@@ -4,9 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TASKS_DIR="$SCRIPT_DIR/../../tasks"
 
+failures=0
+failed_dirs=()
 find "$TASKS_DIR" -mindepth 1 -maxdepth 1 -type d | while read -r dir; do
     echo "=============================="
-    echo "Processing $dir"
+    echo "=============================="
+    echo "=============================="
+    echo "check_initial_state: Processing $dir"
     echo "=============================="
 
     dockerfile="$dir/environment/Dockerfile"
@@ -29,7 +33,7 @@ find "$TASKS_DIR" -mindepth 1 -maxdepth 1 -type d | while read -r dir; do
     fi
 
     echo "Running bootstrap test"
-    (
+    if ! (
         dir_name="$(basename "$dir")"
         safe_name="$(printf '%s' "$dir_name" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')"
         unique_suffix="$$-$(date +%s)"
@@ -83,7 +87,21 @@ PY
 
         docker cp "$dir/." "$container_name:/workspace"
         docker start -a "$container_name"
-    )
+    ); then
+        echo "❌ $dir failed"
+        failures=$((failures + 1))
+        failed_dirs+=("$dir")
+        continue
+    fi
 
     echo "✅ $dir passed"
 done
+
+if [ "$failures" -gt 0 ]; then
+    echo "$failures tasks failed" >&2
+    echo "Failed directories:" >&2
+    for failed_dir in "${failed_dirs[@]}"; do
+        echo "- $failed_dir" >&2
+    done
+    exit 1
+fi

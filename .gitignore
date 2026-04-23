@@ -1,16 +1,20 @@
+# Generated
 tasks*/
 jobs*/
 
+# Envs
 .env
 .env.*
 !.env.example
 !.env.sample
 !.env.template
 
+# Python cache
 .venv/
 __pycache__/
 *.py[cod]
 
+# Certs
 local_scripts/certs/
 *.pem
 *.key
@@ -18,3 +22,7 @@ local_scripts/certs/
 *.pfx
 *.crt
 *.cer
+
+# Temp
+tmp/
+harbor_gen_config.json
