@@ -25,7 +25,7 @@ CURRENT_ATTEMPT=0
 
 while [[ $SUCCESSFUL_TASKS -lt $count && $CURRENT_ATTEMPT -lt $MAX_ATTEMPTS ]]; do
     echo "--- Generating a new task ($SUCCESSFUL_TASKS/$count) ---"
-    trash "$SCRIPT_DIR/../harbor_gen_config.json"
+    trash "$SCRIPT_DIR/../harbor_gen_config.json" || true
     
     # Find existing tasks
     before_dirs=()
