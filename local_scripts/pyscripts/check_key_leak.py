@@ -50,7 +50,7 @@ class FileResult:
 
 
 def build_parser() -> argparse.ArgumentParser:
-	repo_root = Path(__file__).resolve().parent.parent
+	repo_root = Path(__file__).resolve().parent.parent.parent
 	parser = argparse.ArgumentParser(
 		description="Scan the jobs directory for leaked secrets and mask them in place.",
 	)

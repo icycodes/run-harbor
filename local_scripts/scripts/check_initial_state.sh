@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-TASKS_DIR="$SCRIPT_DIR/../tasks"
+TASKS_DIR="$SCRIPT_DIR/../../tasks"
 
 find "$TASKS_DIR" -mindepth 1 -maxdepth 1 -type d | while read -r dir; do
     echo "=============================="
