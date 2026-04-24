@@ -1,80 +1,82 @@
+# Trigger.dev Benchmark Plan
+
 ### 1. Library Overview
-*   **Description**: Trigger.dev is an open-source background jobs framework for TypeScript/Node.js. It allows developers to write long-running, resilient workflows (tasks) using plain async code, handling retries, queuing, and state management automatically.
-*   **Ecosystem Role**: It serves as a modern, developer-centric alternative to BullMQ, Inngest, or Temporal, specifically optimized for the Next.js and AI Agent ecosystem.
-*   **Project Setup**:
-    1.  Initialize: `npx trigger.dev@latest init` (creates `trigger.config.ts` and `/trigger` directory).
-    2.  Install SDK: `npm install @trigger.dev/sdk@latest`.
-    3.  Local Dev: `npx trigger.dev@latest dev` (connects local tasks to the Trigger.dev dashboard).
-    4.  Environment: Requires `TRIGGER_SECRET_KEY` in `.env`.
+
+* **Description**: Trigger.dev is a background job and workflow automation platform for TypeScript/JavaScript. It focuses on "durable" execution, meaning tasks can run for a long time (no timeouts), handle retries automatically, and pause/resume based on external events (Waitpoints).
+* **Ecosystem Role**: It replaces traditional serverless functions or simple message queues for complex, long-running workflows, especially those involving AI agents, human-in-the-loop approvals, and multi-step integrations.
+* **Project Setup**:
+    1. Initialize: `npx trigger.dev@latest init` (sets up `trigger.config.ts` and dependencies).
+    2. Local Development: `npx trigger.dev@latest dev` (runs a local worker that connects to the Trigger.dev platform).
+    3. Deployment: `npx trigger.dev@latest deploy`.
+    4. Environment Variables: Requires `TRIGGER_SECRET_KEY` in `.env`.
+
 ### 2. Core Primitives & APIs
-*   **`task` / `schemaTask`**: The basic unit of work. `schemaTask` adds Zod validation.
-    ```typescript
-    import { task, schemaTask } from "@trigger.dev/sdk";
-    import { z } from "zod";
-    export const myTask = schemaTask({
-      id: "generate-report",
-      schema: z.object({ userId: z.string() }),
-      run: async (payload, { ctx }) => {
-        // Implementation
-        return { url: "https://..." };
-      },
-    });
-    ```
-    [Tasks Overview](https://trigger.dev/docs/tasks/overview)
-*   **`wait`**: Pause execution without consuming compute resources.
-    ```typescript
-    import { wait } from "@trigger.dev/sdk";
-    await wait.for({ seconds: 30 });
-    await wait.until(new Date("2026-01-01"));
-    const { data } = await wait.forToken("approval-token"); // Human-in-the-loop
-    ```
-    [Wait Overview](https://trigger.dev/docs/wait)
-*   **`triggerAndWait` / `batch.triggerByTaskAndWait`**: Orchestrate sub-tasks.
-    ```typescript
-    // Sequential
-    const result = await otherTask.triggerAndWait({ id: 1 });
-    const data = result.unwrap(); // V4 returns a Result object
-    // Parallel (Replacement for Promise.all)
-    const results = await batch.triggerByTaskAndWait([
-      { task: taskA, payload: { x: 1 } },
-      { task: taskB, payload: { y: 2 } }
-    ]);
-    ```
-    [Orchestration](https://trigger.dev/docs/tasks/overview#orchestrating-tasks)
-*   **`ai.tool`**: Direct integration with Vercel AI SDK.
-    ```typescript
-    import { ai } from "@trigger.dev/sdk";
-    const tool = ai.tool(mySchemaTask); // Use directly in AI SDK 'tools' object
-    ```
-    [AI Tool](https://trigger.dev/docs/tasks/schemaTask#ai-tool)
-*   **`queue`**: Pre-defined concurrency control.
-    ```typescript
-    import { queue } from "@trigger.dev/sdk";
-    const criticalQueue = queue({ name: "critical", concurrencyLimit: 1 });
-    ```
-    [Concurrency & Queues](https://trigger.dev/docs/queue-concurrency)
+
+* **`task()`**: The primary building block. Defines an idempotent, retriable function.
+    * [Documentation: Writing Tasks](https://trigger.dev/docs/writing-tasks)
+* **`wait.forToken()` / `wait.createToken()`**: Pauses a run until an external callback (Human-in-the-loop) completes the token.    * [Documentation: Waitpoints](https://trigger.dev/docs/waitpoints)
+* **`triggerAndWait()` / `batchTriggerAndWait()`**: Orchestrates child tasks, pausing the parent until children complete without consuming compute resources.
+    * [Documentation: Orchestration](https://trigger.dev/docs/orchestration)
+* **`schemaTask()`**: A task wrapper that uses Zod for payload validation.
+    * [Documentation: Schema Validation](https://trigger.dev/docs/schema-validation)
+* **`ai.tool()`**: Converts a task into a tool compatible with the Vercel AI SDK or other LLM frameworks.
+**Code Snippets:**
+```ts
+// Basic Task with Retry and Schema
+import { schemaTask } from "@trigger.dev/sdk";
+import { z } from "zod";
+export const processUserTask = schemaTask({
+  id: "process-user",
+  schema: z.object({ id: z.string(), email: z.string().email() }),
+  retry: { maxAttempts: 3, factor: 2 },
+  run: async (payload, { ctx }) => {
+    // Business logic here
+    return { success: true, userId: payload.id };
+  },
+});
+// Human-in-the-loop (Waitpoints)
+import { task, wait } from "@trigger.dev/sdk";
+export const approvalWorkflow = task({
+  id: "approval-workflow",
+  run: async (payload: { amount: number }) => {
+    const token = await wait.createToken({ timeout: "24h" });
+    // Send token.url to Slack/Email for approval
+    const result = await wait.forToken<{ approved: boolean }>(token);
+    if (result.ok && result.output.approved) {
+      // Proceed with payment
+    }
+  },
+});
+```
+
 ### 3. Real-World Use Cases & Templates
-*   **AI Agent Refinement Loops**: Using `triggerAndWait` recursively to have an LLM evaluate and improve its own output. [Guide](https://trigger.dev/docs/guides/ai-agents/translate-and-refine)
-*   **Human-in-the-Loop Approvals**: Using `wait.forToken` to pause a workflow until a user clicks a button in a React frontend. [Template](https://trigger.dev/docs/guides/example-projects/human-in-the-loop-workflow)
-*   **Real-time Streaming Progress**: Using `streams.pipe()` to send LLM tokens or CSV processing progress back to a Next.js UI via WebSockets. [Guide](https://trigger.dev/docs/tasks/streams)
-*   **Media Processing Pipelines**: Orchestrating FFmpeg or Sharp tasks with automatic retries for heavy compute. [Example](https://trigger.dev/docs/guides/examples/ffmpeg-video-processing)
+
+* **AI Agent Orchestration**: Using `triggerAndWait` to chain multiple LLM calls with different models and tools. [Example: AI Research Agent](https://github.com/triggerdotdev/examples/tree/main/ai-research-agent)
+* **Real-time Data Processing**: Streaming LLM outputs or CSV processing progress back to a frontend using `streams.pipe()`. [Example: Realtime CSV Importer](https://github.com/triggerdotdev/examples/tree/main/realtime-csv-importer)
+* **Human-in-the-loop Approvals**: Pausing a billing or deployment workflow until a manager clicks an "Approve" button. [Template: Human-in-the-loop](https://github.com/triggerdotdev/examples/tree/main/human-in-the-loop-workflow)
+
 ### 4. Developer Friction Points
-*   **Parallel Wait Error**: Developers often try `await Promise.all([task.triggerAndWait(), ...])`, which is **not supported** in Trigger.dev V4 and throws an error. They must use `batch.triggerByTaskAndWait`. [Issue #1957](https://github.com/triggerdotdev/trigger.dev/issues/1957)
-*   **V4 Result Unwrapping**: In V4, `triggerAndWait` returns a `Result` object. Forgetting to call `.unwrap()` or check `.ok` before accessing output is a common bug. [Migration Guide](https://trigger.dev/docs/migrating-from-v3#triggerandwait-batchtriggerandwait)
-*   **Queue Definition Requirement**: Unlike V3, V4 requires queues to be explicitly defined. On-demand queue creation in `trigger()` options no longer works. [Breaking Changes](https://trigger.dev/docs/migrating-from-v3#queue-changes)
-*   **Missing `await` on Triggers**: Forgetting to `await` a `.trigger()` call can cause the parent task to finish and the process to exit before the trigger is actually sent. [Troubleshooting](https://trigger.dev/docs/troubleshooting#when-triggering-subtasks-the-parent-task-finishes-too-soon)
+
+* **`Promise.all` Restriction**: Wrapping `triggerAndWait` or `batchTriggerAndWait` in `Promise.all` is NOT supported and will cause runs to hang or fail. Developers must use the built-in `batchTriggerAndWait` method instead.
+* **Import Path Confusion**: Historically, v3 used `@trigger.dev/sdk/v3`. In v4, the correct import is simply `@trigger.dev/sdk`. Using the old path or the deprecated `client.defineJob` (v2) is a common source of errors.
+* **Task Exports**: Every task must be a named export from a file in the `dirs` specified in `trigger.config.ts`. Forgetting to export or placing tasks in the wrong directory results in "Task not found" errors during `dev`.
+
 ### 5. Evaluation Ideas
-*   **Basic**: Implement a task that fetches data from an API with a custom retry strategy (exponential backoff).
-*   **Intermediate**: Create a "Human-in-the-loop" email campaign where the first task generates a draft and waits for a "Send" token before proceeding.
-*   **Intermediate**: Implement a parallel image processing workflow using `batch.triggerByTaskAndWait` to resize 5 images simultaneously.
-*   **Advanced**: Build an AI Agent loop that uses `ai.tool` to search a database, evaluates the result, and recurses if the information is insufficient.
-*   **Advanced**: Set up a complex concurrency scenario using `queue` and `concurrencyKey` to ensure only one task runs per `userId` at a time.
-*   **Advanced**: Implement a real-time CSV importer that streams progress percentages to a mock frontend using `streams.pipe()`.
-### 6. Integration
+
+* **Implement a scheduled data sync**: Create a task that runs every hour to fetch data from an external API and update a database.
+* **Build a multi-stage AI pipeline**: Implement a task that generates a blog post summary, then triggers a child task to translate it into three languages in parallel using `batchTriggerAndWait`.
+* **Set up a human approval gate**: Create a workflow that pauses after an expensive AI generation and only proceeds to "publish" if a `wait.forToken` is completed with an `approved: true` payload.
+* **Handle large-scale batch processing**: Trigger a task that processes 1,000 items by batching them into sub-tasks, ensuring correct error handling and results aggregation.
+* **Integrate with Vercel AI SDK**: Convert a Trigger.dev task into a tool using `ai.tool` and use it within a `generateText` call inside another task.
+* **Resilient Webhook Handler**: Build a task that receives a webhook, uses idempotency keys to prevent duplicates, and performs a multi-step integration with retries.
+
+### 6. Sources
+
+1. [Trigger.dev Documentation (llms-full.txt)](https://trigger.dev/docs/llms-full.txt) - Full technical reference.
+2. [Trigger.dev v4 GA Announcement](https://trigger.dev/changelog/trigger-v4-ga) - Overview of new features like Waitpoints and Warm Starts.
+3. [Trigger.dev Examples Repository](https://github.com/triggerdotdev/examples) - Collection of full-stack projects.
+4. [Building with AI Guide](https://trigger.dev/docs/building-with-ai) - Best practices for LLM integrations and AI agents.
+5. [Waitpoints Overview](https://trigger.dev/docs/waitpoints) - Detailed primitive documentation for pausing runs.
+
+### 7. Integration
 *   **Trigger.dev**: A `project_ref` and a `TRIGGER_SECRET_KEY` are required to set up the project.
-### 7. Sources
-1. [Trigger.dev llms.txt](https://trigger.dev/docs/llms.txt) - Full documentation index.
-2. [Migrating from v3 to v4](https://trigger.dev/docs/migrating-from-v3.md) - List of breaking changes and new V4 features.
-3. [Trigger.dev Troubleshooting](https://trigger.dev/docs/troubleshooting) - Common errors like parallel wait restrictions.
-4. [Building with AI Guide](https://trigger.dev/docs/building-with-ai.md) - Patterns for LLM streaming and agent orchestration.
-5. [Trigger.dev GitHub Issues](https://github.com/triggerdotdev/trigger.dev/issues) - Research on middleware and lifecycle hook bugs.
