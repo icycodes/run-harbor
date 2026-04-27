@@ -6,12 +6,6 @@ MODELS=(
     "zai/glm-4.7"
 )
 
-# Parse --debug flag
-DEBUG_MODE=false
-if [[ " $@ " =~ " --debug " ]]; then
-    DEBUG_MODE=true
-fi
-
 # Default to 1 model if no argument is provided
 NUM_MODELS_ARG=${1:-1}
 
@@ -47,27 +41,16 @@ for model in "${MODELS_TO_RUN[@]}"; do
     MODEL_ARGS+=(--model "$model")
 done
 
-HARBOR_ARGS=()
-if [ "$DEBUG_MODE" = true ]; then
-    HARBOR_ARGS+=(--artifact /home/user)
-fi
-
 harbor run \
     "${MODEL_ARGS[@]}" \
-    "${HARBOR_ARGS[@]}" \
     --agent-import-path agents.pochi:Pochi \
     --env docker \
     --path $TASKS_DIR \
     --jobs-dir $JOBS_DIR \
     --n-attempts 1 \
     --max-retries 0 \
-    --n-concurrent 5 \
+    --n-concurrent 1 \
+    --artifact /home/user \
     --yes
 
-CHECK_KEY_LEAK_ARGS=()
-if [ "$DEBUG_MODE" = true ]; then
-    CHECK_KEY_LEAK_ARGS+=(--dry-run)
-fi
-
-python3 "$SCRIPT_DIR/pyscripts/check_key_leak.py" "${CHECK_KEY_LEAK_ARGS[@]}"
-
+python3 "$SCRIPT_DIR/pyscripts/check_key_leak.py"
